@@ -17,6 +17,7 @@ import { Role } from './entities/role.entity';
 import { Permission } from './entities/permission.entity';
 import { LoginUserDto } from './dto/login-user.dto';
 import { LoginUserVo } from './vo/login-user.vo';
+import { UpdateUserPasswordDto } from './dto/update-user-password.dto';
 
 @Injectable()
 export class UserService {
@@ -135,5 +136,65 @@ export class UserService {
         return arr;
       }, []),
     };
+  }
+
+  async findUserDetailById(userId: number) {
+    return await this.userRepository.findOne({ where: { id: userId } });
+  }
+
+  async updatePassword(userId: number, passwordDto: UpdateUserPasswordDto) {
+    const captcha = await this.redisService.get(
+      `update_password_captcha_${passwordDto.email}`,
+    );
+
+    if (!captcha) {
+      throw new HttpException('验证码已过期', HttpStatus.BAD_REQUEST);
+    }
+
+    if (passwordDto.captcha !== captcha) {
+      throw new HttpException('验证码错误', HttpStatus.BAD_REQUEST);
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    user.password = md5(passwordDto.password);
+
+    try {
+      await this.userRepository.save(user);
+      return '密码修改成功';
+    } catch (error) {
+      this.logger.error(error.UserService);
+      return '密码修改失败';
+    }
+  }
+
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    const captcha = await this.redisService.get(
+      `update_user_captcha_${updateUserDto.email}`,
+    );
+
+    if (!captcha) {
+      throw new HttpException('验证码已过期', HttpStatus.BAD_REQUEST);
+    }
+
+    if (captcha !== updateUserDto.captcha) {
+      throw new HttpException('验证码错误', HttpStatus.BAD_REQUEST);
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: id } });
+    if (updateUserDto.nickName) {
+      user.nickName = updateUserDto.nickName;
+    }
+    if (updateUserDto.avatar) {
+      user.avatar = updateUserDto.avatar;
+    }
+
+    try {
+      await this.userRepository.save(user);
+      return '修改成功';
+    } catch (error) {
+      this.logger.error(error.UserService);
+      return '修改失败';
+    }
   }
 }
